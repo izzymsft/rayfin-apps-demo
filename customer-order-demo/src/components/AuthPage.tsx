@@ -18,7 +18,7 @@ const msLogo = (
 );
 
 export function AuthPage() {
-  const { signIn, fabricAuthEnabled } = useAuth();
+  const { signIn, fabricAuthEnabled, error: authError } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -51,7 +51,7 @@ export function AuthPage() {
         <div className="w-full max-w-sm">
           <div className="rounded-3xl border border-white/60 bg-white/80 p-8 shadow-xl backdrop-blur-sm">
             <div className="mb-8 text-center">
-              <h1 className="text-2xl font-bold text-gray-900">Todo App</h1>
+              <h1 className="text-2xl font-bold text-gray-900">Customer &amp; Order Management</h1>
               <p className="mt-2 text-sm text-gray-500">
                 Sign in to get started.
               </p>
@@ -67,8 +67,8 @@ export function AuthPage() {
               {buttonLabel}
             </button>
 
-            {error && (
-              <p className="mt-3 text-center text-sm text-red-600">{error}</p>
+            {(error || authError) && (
+              <p role="alert" className="mt-3 text-center text-sm text-red-600">{error || authError}</p>
             )}
           </div>
         </div>

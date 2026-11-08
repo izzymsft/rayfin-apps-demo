@@ -22,7 +22,10 @@ function isLocalBackendUrl(url: string): boolean {
  * - Anything else     → {@link RayfinAuthService} (requires VITE_FABRIC_* vars)
  */
 export async function bootstrapAuth(): Promise<IAuthService> {
-  const apiUrl = import.meta.env.VITE_RAYFIN_API_URL || 'http://localhost:5168';
+  const apiUrl = import.meta.env.VITE_RAYFIN_API_URL;
+  if (!apiUrl) {
+    throw new Error('Rayfin backend is not configured. Run npx rayfin login, then npm run dev to generate .env.local.');
+  }
   const localDev = isLocalBackendUrl(apiUrl);
   const publishableKey = import.meta.env.VITE_RAYFIN_PUBLISHABLE_KEY;
 
@@ -45,6 +48,9 @@ export async function bootstrapAuth(): Promise<IAuthService> {
   });
 
   if (localDev) {
+    if (!import.meta.env.DEV) {
+      throw new Error('Local development authentication is not available in production.');
+    }
     return new MockAuthService(client);
   }
 

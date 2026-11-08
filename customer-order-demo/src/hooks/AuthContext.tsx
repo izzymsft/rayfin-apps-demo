@@ -40,8 +40,12 @@ export function AuthProvider({ children, authService }: AuthProviderProps) {
       .then((current) => {
         if (!cancelled && current) setUser(current);
       })
-      .catch(() => {
-        if (!cancelled) setUser(null);
+      .catch((err) => {
+        console.error('Authentication initialization failed', err);
+        if (!cancelled) {
+          setUser(null);
+          setError(err instanceof Error ? err.message : 'Authentication initialization failed.');
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -73,6 +77,8 @@ export function AuthProvider({ children, authService }: AuthProviderProps) {
       window.location.reload();
     } catch (err) {
       console.error('Logout error:', err);
+      setError(err instanceof Error ? err.message : 'Sign out failed.');
+      throw err;
     }
   }, [authService]);
 

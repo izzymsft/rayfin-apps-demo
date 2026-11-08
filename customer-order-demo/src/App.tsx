@@ -8,7 +8,13 @@ import {
 
 import { AuthPage } from '@/components/AuthPage';
 import { useAuth } from '@/hooks/AuthContext';
-import { HomePage } from '@/pages/HomePage';
+import { AppLayout } from '@/components/layout/AppLayout';
+import { DashboardPage } from '@/pages/DashboardPage';
+import { CustomersPage } from '@/pages/CustomersPage';
+import { CustomerDetailsPage } from '@/pages/CustomerDetailsPage';
+import { ProductsPage } from '@/pages/ProductsPage';
+import { OrdersPage } from '@/pages/OrdersPage';
+import { OrderDetailsPage } from '@/pages/OrderDetailsPage';
 
 /** The route a visitor asked for before being sent to sign in. */
 interface AuthRedirectState {
@@ -74,7 +80,7 @@ function AuthGuard({
 
 function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.BASE_URL}>
       {/* ensure all new routes require auth */}
       <Routes>
         <Route
@@ -86,13 +92,19 @@ function App() {
           }
         />
         <Route
-          path="/"
           element={
             <AuthGuard requireAuth={true}>
-              <HomePage />
+              <AppLayout />
             </AuthGuard>
           }
-        />
+        >
+          <Route index element={<DashboardPage />} />
+          <Route path="/customers" element={<CustomersPage />} />
+          <Route path="/customers/:id" element={<CustomerDetailsPage />} />
+          <Route path="/products" element={<ProductsPage />} />
+          <Route path="/orders" element={<OrdersPage />} />
+          <Route path="/orders/:id" element={<OrderDetailsPage />} />
+        </Route>
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
