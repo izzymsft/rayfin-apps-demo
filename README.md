@@ -16,10 +16,9 @@ npm install -g npm@12.2.1
 
 Create a new Project for the Rayfin App
 
-We tested this Hack with Rayfin 1.36.2. So we are going to pin the version to 1.36.2
 
 # Create a new Rayfin application
-npm create @microsoft/rayfin@1.36.2 customer-order-demo -- --template todoapp
+npm create @microsoft/rayfin@latest customer-order-demo -- --template todoapp
 
 # Navigate to the project
 cd customer-order-demo
@@ -32,6 +31,9 @@ npx rayfin --version
 
 # Authenticate with Microsoft Fabric
 npx rayfin login
+
+# This is where we can use Copilot to build the app
+# Use the instructions in RAYFIN-BUILDER-PROMPT.md to build the Customer & Order Management CRUD application using Microsoft Rayfin.
 
 # Start development
 npm run dev

@@ -31,6 +31,7 @@ Before making changes:
 Generate the following structure, adapting to the existing project layout if necessary.
 
 ```text
+
 customer-order-demo/
 ├── rayfin/
 │   ├── data/
@@ -144,7 +145,7 @@ Create an `Address` entity with:
 | state | String | Required, max 100 |
 | postalCode | String | Required, max 20 |
 | country | String | Required, max 100 |
-| addressType | String | Billing, Shipping, Other |
+| addressType | String | Billing, Shipping, Work, Other |
 | isPrimary | Boolean | Default false |
 
 Relationships:
@@ -386,7 +387,7 @@ Display customer information using tabs:
 - Email Addresses.
 - Orders.
 
-Each related-data tab must support CRUD.
+Each related-data tab must support CRUD operations.
 
 **ProductsPage**
 - Display products.
