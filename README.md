@@ -1,15 +1,31 @@
 A Rayfin Application Demo
 
-Install node 26.13.0 or later and ensure npm is updated to version 12.2.1 or later
+Install node version 22 or 24 Do not install the latest version (26) because it is not supported by the latest version of Rayfin
+
+Use the [Node Version Manager](https://github.com/nvm-sh/nvm#intro) to install the specific Node.js version
+
+```bash
+
+$ nvm install 24
+Now using node v24.14.0 (npm v11.9.0)
+$ node -v
+v24.14.0
+$ nvm use 22
+Now using node v22.22.1 (npm v10.9.4)
+$ node -v
+v22.22.1
+$ nvm use 20
+Now using node v20.20.1 (npm v10.8.2)
+
+```
+
+Check your current Node and Node Package Manager version
 
 ```bash
 
 node --version
 
 npm --version
-
-
-npm install -g npm@12.2.1
 
 ```
 
