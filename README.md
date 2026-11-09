@@ -76,3 +76,13 @@ npx rayfin login
 npm run dev
 
 ```
+
+## Errors Due to Pause Capacity
+
+If your capacity is paused, please restart it
+
+![A Fabric Capacity Error](./images/fabric-paused-capacity-error.png "Paused Capacity Error")
+
+After your restart you should be good.
+
+![A Fabric Capacity Restart](./images/fabric-restart-fabric-capacity.png "Restart Capacity")
