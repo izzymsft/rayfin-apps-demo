@@ -1,5 +1,10 @@
 A Rayfin Application Demo
 
+![A Fabric App](./images/fabric-app-01.png "Rayfin App")
+
+![A Fabric App](./images/fabric-app-02.png "Rayfin App")
+
+
 Install node version 22 or 24 Do not install the latest version (26) because it is not supported by the latest version of Rayfin
 
 Use the [Node Version Manager](https://github.com/nvm-sh/nvm#intro) to install the specific Node.js version
