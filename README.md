@@ -30,6 +30,7 @@ npm install
 npx rayfin --version
 
 # Authenticate with Microsoft Fabric
+# This is where we pick the workspace that is already linked to a Fabric capacity
 npx rayfin login
 
 # This is where we can use Copilot to build the app

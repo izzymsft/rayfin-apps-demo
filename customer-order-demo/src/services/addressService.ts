@@ -14,7 +14,9 @@ export async function getAddressesByCustomer(customerId: string): Promise<Addres
   });
 }
 async function getAddress(id: string): Promise<Address> {
-  return requireRecord(await getRayfinClient().data.Address.findById(requireUuid(id)), 'Address');
+  const rows = await getRayfinClient().data.Address.select([...fields])
+    .where({ id: { eq: requireUuid(id) } }).first(1).execute();
+  return requireRecord(rows[0] ?? null, 'Address');
 }
 export async function createAddress(data: AddressInput): Promise<Address> {
   const input = validateAddress(data);

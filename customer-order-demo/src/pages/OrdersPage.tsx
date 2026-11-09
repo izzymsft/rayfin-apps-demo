@@ -15,7 +15,7 @@ export function OrdersPage() {
     {customers.loading ? <LoadingSpinner /> : <>
       <div className="filters"><label>Customer<select value={customer} onChange={event => setCustomer(event.target.value)}><option value="">All customers</option>{customers.data?.map(row => <option value={row.id} key={row.id}>{row.firstName} {row.lastName}</option>)}</select></label>
         <label>Status<select value={status} onChange={event => setStatus(event.target.value)}><option value="">All statuses</option>{['Draft', 'Submitted', 'Completed', 'Cancelled'].map(value => <option key={value}>{value}</option>)}</select></label></div>
-      <CrudPanel title="Orders" singular="order" load={service.getOrders} create={service.createOrder} update={service.updateOrder} remove={service.deleteOrder}
+      <CrudPanel title="Orders" singular="order" load={service.getOrders} create={service.createOrderWithItems} update={service.updateOrderWithItems} remove={service.deleteOrder}
         search={(row, query) => (!customer || row.customer_id === customer) && (!status || row.status === status) && row.orderNumber.toLowerCase().includes(query)}
         form={props => <OrderForm {...props} customers={customers.data ?? []} />} table={props => <OrderTable {...props} customers={customers.data} />} />
     </>}</>;

@@ -87,6 +87,11 @@ dialog::backdrop { background: #0006; }
 .form-grid { border: 0; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
 .checkbox-field { display: flex; align-items: center; justify-content: space-between; align-self: end; min-height: 40px; }
 .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+.form-content { border: 0; margin: 24px 0 0; padding: 0; min-width: 0; }
+.order-lines-heading h3 { margin: 0; font-size: 16px; font-weight: 600; }
+.order-form-line { display: grid; grid-template-columns: minmax(0, 2fr) minmax(65px, .6fr) auto auto auto; align-items: end; gap: 12px; padding: 16px 0; border-bottom: 1px solid #eee; }
+.line-label { display: block; color: #616161; font-size: 12px; margin-bottom: 10px; }
+.order-form-line output { display: block; padding-bottom: 8px; font-size: 13px; white-space: nowrap; }
 .tabs { display: flex; gap: 6px; border-bottom: 1px solid #d1d1d1; margin-bottom: 24px; overflow-x: auto; }
 .tabs button { padding: 12px 18px; background: transparent; border: 0; border-bottom: 3px solid transparent; white-space: nowrap; cursor: pointer; color: #616161; font-size: 14px; }
 .tabs button[aria-selected=true] { border-bottom-color: #0078d4; color: #005a9e; font-weight: 600; }
@@ -112,6 +117,8 @@ dialog::backdrop { background: #0006; }
   #main-content { padding: 20px 16px; } .panel { padding: 18px 14px; }
   .stat-grid { gap: 12px; } .stat-card { padding: 16px; } h1 { font-size: 24px; }
   .form-grid { grid-template-columns: 1fr; } .filters label { min-width: 0; flex: 1; }
+  .order-form-line { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .order-form-line > label:first-child { grid-column: 1 / -1; }
 }
 @media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
 

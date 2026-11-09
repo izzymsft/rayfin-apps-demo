@@ -3,17 +3,20 @@ import { getRayfinClient } from './rayfinClient';
 import { collectPages } from './pagination';
 import { changePrimaryContact, mutationError, requireRecord, requireUuid, validatePhone } from './validation';
 
+const fields = ['id', 'customer_id', 'number', 'type', 'isPrimary'] as const;
 export async function getPhonesByCustomer(customerId: string): Promise<Phone[]> {
   requireUuid(customerId);
   return collectPages(cursor => {
-    let query = getRayfinClient().data.Phone.select(['id', 'customer_id', 'number', 'type', 'isPrimary'])
+    let query = getRayfinClient().data.Phone.select([...fields])
       .where({ customer_id: { eq: customerId } }).orderBy({ id: 'asc' }).first(100);
     if (cursor) query = query.after(cursor);
     return query.executePaginated();
   });
 }
 async function getPhone(id: string): Promise<Phone> {
-  return requireRecord(await getRayfinClient().data.Phone.findById(requireUuid(id)), 'Phone');
+  const rows = await getRayfinClient().data.Phone.select([...fields])
+    .where({ id: { eq: requireUuid(id) } }).first(1).execute();
+  return requireRecord(rows[0] ?? null, 'Phone');
 }
 export async function createPhone(data: PhoneInput): Promise<Phone> {
   const input = validatePhone(data);

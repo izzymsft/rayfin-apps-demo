@@ -4,9 +4,10 @@ import { createAddress, getAddressesByCustomer, updateAddress } from '../service
 import { createEmail, setPrimaryEmail } from '../services/emailService';
 import { createPhone, setPrimaryPhone } from '../services/phoneService';
 import { deleteProduct, getProducts, updateProduct } from '../services/productService';
-import { addOrderItem, calculateOrderTotal, deleteOrder, getOrderItems, updateOrder, updateOrderItem } from '../services/orderService';
+import { addOrderItem, calculateOrderTotal, createOrderWithItems, deleteOrder, getOrderItems, updateOrder, updateOrderItem, updateOrderWithItems } from '../services/orderService';
 import { seedDevelopmentData } from '../services/seed';
-import { sumOrderItems } from '../services/money';
+import { normalizeMoney, sumOrderItems } from '../services/money';
+import type { Order, OrderFormInput, OrderItem } from '../types';
 
 const mocks = vi.hoisted(() => {
   function entity() {
@@ -15,6 +16,7 @@ const mocks = vi.hoisted(() => {
       orderBy: vi.fn(),
       first: vi.fn(),
       after: vi.fn(),
+      execute: vi.fn(),
       executePaginated: vi.fn(),
     };
     for (const method of [query.where, query.orderBy, query.first, query.after]) method.mockReturnValue(query);
@@ -47,16 +49,18 @@ beforeEach(() => {
   vi.clearAllMocks();
   for (const entity of Object.values(mocks.data)) {
     entity.query.executePaginated.mockReset().mockResolvedValue({ items: [], hasNextPage: false });
+    entity.query.execute.mockReset().mockResolvedValue([]);
     entity.findById.mockReset();
     entity.create.mockReset().mockResolvedValue({ id: contactId });
     entity.update.mockReset().mockResolvedValue({});
     entity.delete.mockReset().mockResolvedValue({});
   }
   mocks.getClient.mockReturnValue({ data: mocks.data });
-  mocks.data.Customer.findById.mockResolvedValue(customer);
-  mocks.data.Product.findById.mockResolvedValue(product);
-  mocks.data.Order.findById.mockResolvedValue(order);
-  mocks.data.OrderItem.findById.mockResolvedValue(item);
+  mocks.data.Customer.query.execute.mockResolvedValue([customer]);
+  mocks.data.Product.query.execute.mockResolvedValue([product]);
+  mocks.data.Order.query.execute.mockResolvedValue([order]);
+  mocks.data.OrderItem.query.execute.mockResolvedValue([item]);
+  mocks.data.Order.findById.mockResolvedValue({ id: orderId });
 });
 
 describe('typed API services', () => {
@@ -93,7 +97,7 @@ describe('typed API services', () => {
       customer_id: customerId, line1: '1 Example Lane', city: 'Town', state: 'WA',
       postalCode: '98000', country: 'US', addressType: 'Billing' as const, isPrimary: false,
     };
-    mocks.data.Address.findById.mockResolvedValue({ ...address, id: contactId });
+    mocks.data.Address.query.execute.mockResolvedValue([{ ...address, id: contactId }]);
     expect(await createAddress(address)).toEqual({ ...address, id: contactId });
     expect(mocks.data.Address.create).toHaveBeenCalledWith({ ...address, line2: undefined });
     await updateAddress(contactId, { ...address, line2: '' });
@@ -152,14 +156,14 @@ describe('order snapshot and server totals', () => {
     expect(await getOrderItems(orderId)).toEqual([item]);
   });
   it('changes only quantity, never current product price', async () => {
-    mocks.data.Product.findById.mockResolvedValue({ ...product, unitPrice: '99.00' });
+    mocks.data.Product.query.execute.mockResolvedValue([{ ...product, unitPrice: '99.00' }]);
     await updateOrderItem(itemId, { quantity: 3 });
     expect(mocks.data.OrderItem.update).toHaveBeenCalledWith({ id: itemId }, { quantity: 3 });
-    expect(mocks.data.Product.findById).not.toHaveBeenCalled();
+    expect(mocks.data.Product.query.execute).not.toHaveBeenCalled();
     await expect(updateOrderItem(itemId, { quantity: 3, ...{ unitPrice: '99.00' } })).rejects.toThrow(/immutable/);
   });
   it('reports missing total guard without an unsafe browser repair', async () => {
-    mocks.data.Order.findById.mockResolvedValue({ ...order, totalAmount: '0.00' });
+    mocks.data.Order.query.execute.mockResolvedValue([{ ...order, totalAmount: '0.00' }]);
     await expect(addOrderItem(orderId, productId, 3)).rejects.toThrow(/SQL guards/);
     expect(mocks.data.Order.update).not.toHaveBeenCalled();
     expect(mocks.data.OrderItem.delete).not.toHaveBeenCalled();
@@ -170,10 +174,127 @@ describe('order snapshot and server totals', () => {
   });
 });
 
+describe('order forms persist headers and line items', () => {
+  let savedOrder: Order | null;
+  let savedItems: Map<string, OrderItem>;
+  const input = (): OrderFormInput => ({
+    id: orderId, customer_id: customerId, orderNumber: 'O1', orderDate: '2026-01-01', status: 'Draft',
+    items: [{ id: itemId, product_id: productId, quantity: 3 }], originalItems: [], removedItemIds: [],
+  });
+  function calculateSavedTotal() {
+    if (savedOrder) savedOrder = { ...savedOrder, totalAmount: sumOrderItems([...savedItems.values()]) };
+  }
+  beforeEach(() => {
+    savedOrder = null;
+    savedItems = new Map();
+    mocks.data.Order.findById.mockImplementation(async () => savedOrder ? { id: savedOrder.id } : null);
+    mocks.data.Order.query.execute.mockImplementation(async () => savedOrder ? [savedOrder] : []);
+    mocks.data.Order.create.mockImplementation(async (header: Order) => {
+      if (savedOrder) throw new Error('Duplicate order ID');
+      savedOrder = { ...header }; return savedOrder;
+    });
+    mocks.data.Order.update.mockImplementation(async (_filter, header) => {
+      if (!savedOrder) throw new Error('Order missing');
+      savedOrder = { ...savedOrder, ...header }; return savedOrder;
+    });
+    mocks.data.OrderItem.query.executePaginated.mockImplementation(async () => ({ items: [...savedItems.values()], hasNextPage: false }));
+    mocks.data.OrderItem.query.execute.mockImplementation(async () => {
+      const filter = mocks.data.OrderItem.query.where.mock.calls.at(-1)?.[0];
+      const saved = savedItems.get(filter?.id?.eq);
+      return saved ? [saved] : [];
+    });
+    mocks.data.OrderItem.create.mockImplementation(async (line: OrderItem) => {
+      if (savedItems.has(line.id)) throw new Error('Duplicate item ID');
+      const saved = { ...line, unitPrice: normalizeMoney(line.unitPrice) };
+      savedItems.set(saved.id, saved); calculateSavedTotal(); return saved;
+    });
+    mocks.data.OrderItem.update.mockImplementation(async ({ id }, changes) => {
+      const saved = savedItems.get(id);
+      if (!saved) throw new Error('Item missing');
+      savedItems.set(id, { ...saved, ...changes }); calculateSavedTotal();
+    });
+    mocks.data.OrderItem.delete.mockImplementation(async ({ id }) => {
+      savedItems.delete(id); calculateSavedTotal();
+    });
+  });
+  it('creates selected products and returns their exact persisted total', async () => {
+    const result = await createOrderWithItems(input());
+    expect(result.totalAmount).toBe('0.30');
+    expect(savedItems.get(itemId)).toEqual(item);
+    expect(mocks.data.Order.create).toHaveBeenCalledWith(expect.objectContaining({ id: orderId, totalAmount: 0 }));
+    expect(mocks.data.OrderItem.create).toHaveBeenCalledWith({ id: itemId, order_id: orderId, product_id: productId, quantity: 3, unitPrice: 0.1 });
+    expect(mocks.data.Order.update).not.toHaveBeenCalled();
+  });
+  it('updates quantities using historical prices, never the new catalog price', async () => {
+    await createOrderWithItems(input());
+    const original = [...savedItems.values()];
+    mocks.data.Product.query.execute.mockResolvedValue([{ ...product, unitPrice: '99.99' }]);
+    const result = await updateOrderWithItems(orderId, { ...input(), originalItems: original, items: [{ id: itemId, product_id: productId, quantity: 5 }] });
+    expect(result.totalAmount).toBe('0.50');
+    expect(savedItems.get(itemId)?.unitPrice).toBe('0.10');
+    expect(mocks.data.Order.update).toHaveBeenCalledWith({ id: orderId }, expect.not.objectContaining({ totalAmount: expect.anything() }));
+  });
+  it('removes selected original lines but does not delete concurrently added lines', async () => {
+    await createOrderWithItems(input());
+    const original = [...savedItems.values()];
+    savedItems.set(contactId, { ...item, id: contactId, quantity: 1 });
+    calculateSavedTotal();
+    const result = await updateOrderWithItems(orderId, { ...input(), originalItems: original, items: [], removedItemIds: [itemId] });
+    expect(result.totalAmount).toBe('0.10');
+    expect(savedItems.has(itemId)).toBe(false);
+    expect(savedItems.has(contactId)).toBe(true);
+    expect(mocks.data.OrderItem.delete).toHaveBeenCalledExactlyOnceWith({ id: itemId });
+  });
+  it('resumes an interrupted create using the same IDs without duplicate items', async () => {
+    const create = mocks.data.OrderItem.create.getMockImplementation()!;
+    mocks.data.OrderItem.create.mockImplementationOnce(async (line: OrderItem) => {
+      await create(line); throw new Error('Response lost after commit');
+    });
+    await expect(createOrderWithItems(input())).rejects.toThrow(/Some changes may already be saved/);
+    expect((await createOrderWithItems(input())).totalAmount).toBe('0.30');
+    expect(mocks.data.Order.create).toHaveBeenCalledTimes(1);
+    expect(mocks.data.OrderItem.create).toHaveBeenCalledTimes(1);
+    expect(savedItems.size).toBe(1);
+  });
+  it('removes a partially saved new line when it is removed before retrying', async () => {
+    const create = mocks.data.OrderItem.create.getMockImplementation()!;
+    mocks.data.OrderItem.create.mockImplementationOnce(async (line: OrderItem) => {
+      await create(line); throw new Error('Response lost after commit');
+    });
+    await expect(createOrderWithItems(input())).rejects.toThrow(/did not finish/);
+    const result = await createOrderWithItems({ ...input(), items: [], removedItemIds: [itemId] });
+    expect(result.totalAmount).toBe('0.00');
+    expect(savedItems.size).toBe(0);
+  });
+  it('rejects inactive products and invalid quantities before creating a header', async () => {
+    mocks.data.Product.query.execute.mockResolvedValue([{ ...product, isActive: false }]);
+    await expect(createOrderWithItems(input())).rejects.toThrow(/Inactive/);
+    await expect(createOrderWithItems({ ...input(), items: [{ id: itemId, product_id: productId, quantity: 0 }] })).rejects.toThrow(/Quantity/);
+    expect(mocks.data.Order.create).not.toHaveBeenCalled();
+    expect(mocks.data.OrderItem.create).not.toHaveBeenCalled();
+  });
+  it('detects concurrent edits before overwriting a changed quantity', async () => {
+    await createOrderWithItems(input());
+    const original = [...savedItems.values()];
+    savedItems.set(itemId, { ...item, quantity: 7 }); calculateSavedTotal();
+    await expect(updateOrderWithItems(orderId, { ...input(), originalItems: original, items: [{ id: itemId, product_id: productId, quantity: 4 }] })).rejects.toThrow(/changed.*editing/);
+    expect(savedItems.get(itemId)?.quantity).toBe(7);
+    expect(mocks.data.Order.update).not.toHaveBeenCalled();
+  });
+  it('never disguises a missing server total guard with a client-side total write', async () => {
+    mocks.data.OrderItem.create.mockImplementation(async (line: OrderItem) => {
+      savedItems.set(line.id, { ...line }); return line;
+    });
+    await expect(createOrderWithItems(input())).rejects.toThrow(/SQL guards/);
+    expect(savedOrder?.totalAmount).toBe(0);
+    expect(mocks.data.Order.update).not.toHaveBeenCalled();
+  });
+});
+
 describe('contact primary mutations', () => {
   it('creates nonprimary first, then performs one atomic SQL-controlled selection', async () => {
     const phone = { id: contactId, customer_id: customerId, number: '+1-202-555-0100', type: 'Work', isPrimary: true };
-    mocks.data.Phone.findById.mockResolvedValue(phone);
+    mocks.data.Phone.query.execute.mockResolvedValue([phone]);
     mocks.data.Phone.query.executePaginated
       .mockResolvedValueOnce({ items: [{ ...phone, isPrimary: false }], hasNextPage: false })
       .mockResolvedValueOnce({ items: [phone], hasNextPage: false });
@@ -191,7 +312,7 @@ describe('contact primary mutations', () => {
     await expect(createEmail({ customer_id: customerId, emailAddress: 'invalid', isPrimary: false })).rejects.toThrow(/email/);
     expect(mocks.data.Email.create).not.toHaveBeenCalled();
     const email = { id: contactId, customer_id: customerId, emailAddress: 'mira@example.com', isPrimary: true };
-    mocks.data.Email.findById.mockResolvedValue(email);
+    mocks.data.Email.query.execute.mockResolvedValue([email]);
     mocks.data.Email.query.executePaginated.mockResolvedValue({ items: [email], hasNextPage: false });
     expect(await setPrimaryEmail(customerId, contactId)).toEqual(email);
     expect(mocks.data.Email.update).toHaveBeenCalledExactlyOnceWith({ id: contactId }, { isPrimary: true });
@@ -219,6 +340,8 @@ describe('development seed safety', () => {
           Object.entries(filters[name] ?? {}).every(([key, value]) => row[key] === value.eq)),
         hasNextPage: false,
       }));
+      entity.query.execute.mockImplementation(async () => [...stores[name].values()].filter(row =>
+        Object.entries(filters[name] ?? {}).every(([key, value]) => row[key] === value.eq)));
       entity.create.mockImplementation(async (input: Row) => {
         if (stores[name].has(input.id)) throw new Error('Duplicate UUID');
         stores[name].set(input.id, { ...input });

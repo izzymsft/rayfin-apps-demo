@@ -65,3 +65,14 @@ export type EmailInput = Omit<Email, 'id'>;
 export type ProductInput = Omit<Product, 'id'>;
 export type OrderInput = Omit<Order, 'id' | 'totalAmount'>;
 export type OrderItemInput = Pick<OrderItem, 'quantity'>;
+export interface OrderLineInput {
+  id: string;
+  product_id: string;
+  quantity: number;
+}
+export interface OrderFormInput extends OrderInput {
+  id: string;
+  items: OrderLineInput[];
+  originalItems: OrderItem[];
+  removedItemIds: string[];
+}

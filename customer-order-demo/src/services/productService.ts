@@ -3,16 +3,21 @@ import { getRayfinClient } from './rayfinClient';
 import { collectPages } from './pagination';
 import { mutationError, nullableTextForWrite, requireRecord, requireUuid, validateProduct } from './validation';
 
+const fields = ['id', 'sku', 'name', 'description', 'unitPrice', 'isActive'] as const;
 export async function getProducts(): Promise<Product[]> {
   return collectPages(cursor => {
-    let query = getRayfinClient().data.Product.select(['id', 'sku', 'name', 'description', 'unitPrice', 'isActive'])
+    let query = getRayfinClient().data.Product.select([...fields])
       .orderBy({ id: 'asc' }).first(100);
     if (cursor) query = query.after(cursor);
     return query.executePaginated();
   });
 }
 export async function getProductById(id: string): Promise<Product> {
-  return requireRecord(await getRayfinClient().data.Product.findById(requireUuid(id)), 'Product');
+  const rows = await getRayfinClient().data.Product.select([...fields])
+    .where({ id: { eq: requireUuid(id) } }).first(1).execute();
+  const product = requireRecord(rows[0] ?? null, 'Product');
+  if (typeof product.isActive !== 'boolean') throw new Error('Rayfin did not return a valid product status. Refresh the catalog and retry.');
+  return product;
 }
 export async function createProduct(data: ProductInput): Promise<Product> {
   const input = validateProduct(data);

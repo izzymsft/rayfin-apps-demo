@@ -3,17 +3,20 @@ import { getRayfinClient } from './rayfinClient';
 import { collectPages } from './pagination';
 import { changePrimaryContact, mutationError, requireRecord, requireUuid, validateEmail } from './validation';
 
+const fields = ['id', 'customer_id', 'emailAddress', 'isPrimary'] as const;
 export async function getEmailsByCustomer(customerId: string): Promise<Email[]> {
   requireUuid(customerId);
   return collectPages(cursor => {
-    let query = getRayfinClient().data.Email.select(['id', 'customer_id', 'emailAddress', 'isPrimary'])
+    let query = getRayfinClient().data.Email.select([...fields])
       .where({ customer_id: { eq: customerId } }).orderBy({ id: 'asc' }).first(100);
     if (cursor) query = query.after(cursor);
     return query.executePaginated();
   });
 }
 async function getEmail(id: string): Promise<Email> {
-  return requireRecord(await getRayfinClient().data.Email.findById(requireUuid(id)), 'Email');
+  const rows = await getRayfinClient().data.Email.select([...fields])
+    .where({ id: { eq: requireUuid(id) } }).first(1).execute();
+  return requireRecord(rows[0] ?? null, 'Email');
 }
 export async function createEmail(data: EmailInput): Promise<Email> {
   const input = validateEmail(data);

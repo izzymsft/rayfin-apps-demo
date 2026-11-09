@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react';
+import { useState, type FormEvent, type ReactNode } from 'react';
 import { Button } from './Button';
 import { ErrorMessage } from './ErrorMessage';
 import { errorMessage } from '@/hooks/useResource';
@@ -19,7 +19,7 @@ export interface FormProps<T, I> {
   onSubmit: (input: I) => Promise<void>;
   onCancel: () => void;
 }
-export function EntityForm({ fields, initial, onSubmit, onCancel }: { fields: FormField[]; initial: FormValues; onSubmit: (values: FormValues) => Promise<void>; onCancel: () => void }) {
+export function EntityForm({ fields, initial, onSubmit, onCancel, children, submitDisabled = false }: { fields: FormField[]; initial: FormValues; onSubmit: (values: FormValues) => Promise<void>; onCancel: () => void; children?: ReactNode; submitDisabled?: boolean }) {
   const [values, setValues] = useState(initial);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
@@ -45,7 +45,8 @@ export function EntityForm({ fields, initial, onSubmit, onCancel }: { fields: Fo
         </label>;
       })}
     </fieldset>
+    {children && <fieldset disabled={busy} className="form-content">{children}</fieldset>}
     <ErrorMessage message={error} />
-    <div className="form-actions"><Button variant="secondary" disabled={busy} onClick={onCancel}>Cancel</Button><Button type="submit" disabled={busy}>{busy ? 'Saving...' : 'Save'}</Button></div>
+    <div className="form-actions"><Button variant="secondary" disabled={busy} onClick={onCancel}>Cancel</Button><Button type="submit" disabled={busy || submitDisabled}>{busy ? 'Saving...' : 'Save'}</Button></div>
   </form>;
 }

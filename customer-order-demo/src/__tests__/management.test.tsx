@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import App from '@/App';
 import type { Customer, CustomerInput } from '@/types';
+import { createOrderWithItems, updateOrderWithItems } from '@/services/orderService';
 
 const fixture = vi.hoisted(() => ({
   authenticated: true,
@@ -31,7 +32,8 @@ vi.mock('@/services/orderService', () => ({
   getOrdersByCustomer: async () => [],
   getOrderById: async () => ({ id: 'o1', customer_id: 'c1', orderNumber: 'DEMO-001', orderDate: '2026-11-08T00:00:00Z', status: 'Draft', totalAmount: '25.00' }),
   getOrderItems: async () => [{ id: 'i1', order_id: 'o1', product_id: 'p1', unitPrice: '12.50', quantity: 2 }],
-  createOrder: vi.fn(), updateOrder: vi.fn(), deleteOrder: vi.fn(), addOrderItem: vi.fn(), updateOrderItem: vi.fn(), deleteOrderItem: vi.fn(),
+  createOrder: vi.fn(), updateOrder: vi.fn(), createOrderWithItems: vi.fn().mockResolvedValue(undefined),
+  updateOrderWithItems: vi.fn().mockResolvedValue(undefined), deleteOrder: vi.fn(), addOrderItem: vi.fn(), updateOrderItem: vi.fn(), deleteOrderItem: vi.fn(),
 }));
 vi.mock('@/services/addressService', () => ({
   getAddressesByCustomer: async () => [], createAddress: vi.fn(), updateAddress: vi.fn(), deleteAddress: vi.fn(),
@@ -47,6 +49,7 @@ beforeAll(() => {
   HTMLDialogElement.prototype.close = function () { this.open = false; };
 });
 beforeEach(() => {
+  vi.clearAllMocks();
   fixture.authenticated = true;
   fixture.customers = [{ id: 'c1', firstName: 'Ada', lastName: 'Example', companyName: 'Example Works', isActive: true }];
   window.history.replaceState(null, '', '/');
@@ -120,5 +123,52 @@ describe('management application integration (mocked data API)', () => {
     app.rerender(<App />);
     expect(await screen.findByRole('heading', { name: 'Order DEMO-001' })).toBeInTheDocument();
     expect(window.location.pathname).toBe('/orders/o1');
+  });
+  it('saves products and quantities from the Orders new/edit dialogs', async () => {
+    window.history.replaceState(null, '', '/orders');
+    const user = userEvent.setup();
+    render(<App />);
+    await user.click(await screen.findByRole('button', { name: 'New order' }));
+    await user.click(await screen.findByRole('button', { name: 'Add product' }));
+    await user.selectOptions(screen.getByLabelText('Product 1'), 'p1');
+    await user.clear(screen.getByLabelText('Quantity 1'));
+    await user.type(screen.getByLabelText('Quantity 1'), '2');
+    expect(screen.getByLabelText('Order total')).toHaveTextContent('$25.00');
+    await user.selectOptions(screen.getByLabelText('Customer *'), 'c1');
+    await user.type(screen.getByLabelText('Order number *'), 'NEW-001');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(createOrderWithItems).toHaveBeenCalledWith(expect.objectContaining({ items: [{ id: expect.any(String), product_id: 'p1', quantity: 2 }] })));
+    await user.click(await screen.findByRole('button', { name: 'Edit' }));
+    await user.clear(await screen.findByLabelText('Quantity 1'));
+    await user.type(screen.getByLabelText('Quantity 1'), '3');
+    expect(screen.getByLabelText('Order total')).toHaveTextContent('$37.50');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(updateOrderWithItems).toHaveBeenCalledWith('o1', expect.objectContaining({ items: [{ id: 'i1', product_id: 'p1', quantity: 3 }] })));
+  });
+  it('uses line-aware saving from order details', async () => {
+    window.history.replaceState(null, '', '/orders/o1');
+    render(<App />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Edit order' }));
+    const dialog = within(screen.getByRole('dialog'));
+    await userEvent.clear(await dialog.findByLabelText('Quantity 1'));
+    await userEvent.type(dialog.getByLabelText('Quantity 1'), '4');
+    expect(dialog.getByLabelText('Order total')).toHaveTextContent('$50.00');
+    await userEvent.click(dialog.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(updateOrderWithItems).toHaveBeenCalledWith('o1', expect.objectContaining({ items: [{ id: 'i1', product_id: 'p1', quantity: 4 }] })));
+  });
+  it('saves selected products from the customer Orders tab', async () => {
+    window.history.replaceState(null, '', '/customers/c1');
+    render(<App />);
+    await userEvent.click(await screen.findByRole('tab', { name: 'Orders' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'New order' }));
+    await userEvent.click(await screen.findByRole('button', { name: 'Add product' }));
+    expect(screen.getByLabelText('Customer *')).toHaveValue('c1');
+    await userEvent.selectOptions(screen.getByLabelText('Product 1'), 'p1');
+    await userEvent.type(screen.getByLabelText('Order number *'), 'CUSTOMER-001');
+    expect(screen.getByLabelText('Order total')).toHaveTextContent('$12.50');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(createOrderWithItems).toHaveBeenCalledWith(expect.objectContaining({
+      customer_id: 'c1', orderNumber: 'CUSTOMER-001', items: [{ id: expect.any(String), product_id: 'p1', quantity: 1 }],
+    })));
   });
 });

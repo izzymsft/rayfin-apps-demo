@@ -2,6 +2,7 @@ import { getRayfinClient } from './rayfinClient';
 import { calculateOrderTotal, getOrderById } from './orderService';
 import { moneyForWrite, normalizeMoney } from './money';
 import { mutationError } from './validation';
+import { getProductById } from './productService';
 
 function seedId(group: number, index: number): string {
   return `c0de000${group}-0000-4000-8000-${String(index).padStart(12, '0')}`;
@@ -35,23 +36,27 @@ export async function seedDevelopmentData(): Promise<void> {
     for (let index = 0; index < names.length; index++) {
       const id = seedId(1, index + 1);
       const [firstName, lastName] = names[index];
-      const customer = await ensure(() => data.Customer.findById(id), () => data.Customer.create({
+      const customer = await ensure(() => data.Customer.select(['id', 'firstName', 'lastName'])
+        .where({ id: { eq: id } }).first(1).execute().then(([row]) => row ?? null), () => data.Customer.create({
         id, firstName, lastName, companyName: `Fictional ${lastName} Studio`, isActive: true,
       }));
       if (customer.firstName !== firstName || customer.lastName !== lastName) throw new Error(`Seed UUID collision: ${id}`);
       const addressId = seedId(2, index + 1);
-      const address = await ensure(() => data.Address.findById(addressId), () => data.Address.create({
+      const address = await ensure(() => data.Address.select(['id', 'customer_id'])
+        .where({ id: { eq: addressId } }).first(1).execute().then(([row]) => row ?? null), () => data.Address.create({
         id: addressId, customer_id: id, line1: `${100 + index} Example Lane`,
         city: 'Sampleton', state: 'WA', postalCode: '98000', country: 'United States',
         addressType: 'Billing', isPrimary: false,
       }));
       const phoneId = seedId(3, index + 1);
-      const phone = await ensure(() => data.Phone.findById(phoneId), () => data.Phone.create({
+      const phone = await ensure(() => data.Phone.select(['id', 'customer_id'])
+        .where({ id: { eq: phoneId } }).first(1).execute().then(([row]) => row ?? null), () => data.Phone.create({
         id: phoneId, customer_id: id, number: `+1-202-555-${String(100 + index).padStart(4, '0')}`,
         type: 'Work', isPrimary: false,
       }));
       const emailId = seedId(4, index + 1);
-      const email = await ensure(() => data.Email.findById(emailId), () => data.Email.create({
+      const email = await ensure(() => data.Email.select(['id', 'customer_id'])
+        .where({ id: { eq: emailId } }).first(1).execute().then(([row]) => row ?? null), () => data.Email.create({
         id: emailId, customer_id: id, emailAddress: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@example.com`,
         isPrimary: false,
       }));
@@ -62,7 +67,8 @@ export async function seedDevelopmentData(): Promise<void> {
     for (let index = 1; index <= 20; index++) {
       const id = seedId(5, index);
       const sku = `DEMO-P${String(index).padStart(3, '0')}`;
-      const product = await ensure(() => data.Product.findById(id), () => data.Product.create({
+      const product = await ensure(() => data.Product.select(['id', 'sku'])
+        .where({ id: { eq: id } }).first(1).execute().then(([row]) => row ?? null), () => data.Product.create({
         id, sku, name: `Fictional Studio Supply ${index}`, description: 'Fictional development sample product.',
         unitPrice: moneyForWrite(`${index + 4}.25`), isActive: true,
       }));
@@ -72,7 +78,8 @@ export async function seedDevelopmentData(): Promise<void> {
       const id = seedId(6, index);
       const customerId = seedId(1, ((index - 1) % 10) + 1);
       const orderNumber = `DEMO-O${String(index).padStart(3, '0')}`;
-      const order = await ensure(() => data.Order.findById(id), () => data.Order.create({
+      const order = await ensure(() => data.Order.select(['id', 'customer_id', 'orderNumber'])
+        .where({ id: { eq: id } }).first(1).execute().then(([row]) => row ?? null), () => data.Order.create({
         id, customer_id: customerId, orderNumber,
         orderDate: new Date(`2026-01-${String(index).padStart(2, '0')}T12:00:00.000Z`),
         status: 'Draft', totalAmount: 0,
@@ -81,9 +88,9 @@ export async function seedDevelopmentData(): Promise<void> {
       for (let itemIndex = 0; itemIndex < 2; itemIndex++) {
         const itemId = seedId(7, (index - 1) * 2 + itemIndex + 1);
         const productId = seedId(5, ((index + itemIndex - 1) % 20) + 1);
-        const product = await data.Product.findById(productId);
-        if (!product) throw new Error('Seed product missing.');
-        const item = await ensure(() => data.OrderItem.findById(itemId), () => data.OrderItem.create({
+        const product = await getProductById(productId);
+        const item = await ensure(() => data.OrderItem.select(['id', 'order_id', 'product_id'])
+          .where({ id: { eq: itemId } }).first(1).execute().then(([row]) => row ?? null), () => data.OrderItem.create({
           id: itemId, order_id: id, product_id: productId, quantity: itemIndex + 1,
           unitPrice: moneyForWrite(product.unitPrice),
         }));

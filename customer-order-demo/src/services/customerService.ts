@@ -14,7 +14,9 @@ export async function getCustomers(): Promise<Customer[]> {
   });
 }
 export async function getCustomerById(id: string): Promise<Customer> {
-  return requireRecord(await getRayfinClient().data.Customer.findById(requireUuid(id)), 'Customer');
+  const rows = await getRayfinClient().data.Customer.select([...customerFields])
+    .where({ id: { eq: requireUuid(id) } }).first(1).execute();
+  return requireRecord(rows[0] ?? null, 'Customer');
 }
 export async function createCustomer(data: CustomerInput): Promise<Customer> {
   const input = validateCustomer(data);

@@ -14,7 +14,8 @@ connection, or in-memory business-data fallback is used.
   queries.
 - Products: SKU/name search, CRUD, prices, and active/inactive status.
 - Orders: customer/status filters, CRUD, customer selection, status updates,
-  item creation, quantity edits, removal, immutable price snapshots, and totals.
+  product selection inside new/edit dialogs, unit prices, quantity edits,
+  line removal, immutable price snapshots, and live order totals.
 - Shared responsive Fluent-inspired layout, accessible native dialogs, keyboard
   tabs, required-field validation, confirmation before deletion, loading,
   empty/error states, success notices, and explicit refresh recovery.
@@ -45,6 +46,12 @@ fields, string limits, defaults where appropriate, and lazy `@one` / `@many`
 relationships. Foreign keys use the supported `customer_id`, `order_id`, and
 `product_id` conventions. Related writes use the supported typed Rayfin client.
 SKU and order-number uniqueness are declared in the entity model.
+
+Full-record reads explicitly select their scalar fields, filter by UUID, and
+fetch one row. In the installed SDK, `findById()` selects only the primary key,
+despite its full-entity TypeScript return type; it is used only for existence
+checks. This distinction matters for product active status, snapshot prices,
+order totals, contact refreshes, and idempotent seed checks.
 
 The business entity remains `Order`; the installed generator maps it to the
 plural SQL table `Orders`, avoiding the reserved singular SQL identifier. The existing `Todo`
@@ -95,6 +102,28 @@ transaction. Do not blindly repeat a write when its response is ambiguous.
 Refresh and inspect the persisted record first; notices distinguish a completed
 write from a failed subsequent refresh. The backend migration is part of the
 deployment, not a JavaScript transaction shim.
+
+### Creating and editing an order
+
+Use **New order** or **Edit** in the orders list, the customer's Orders tab, or
+**Edit order** on the details page. Within the dialog, choose **Add product**,
+select a product, and enter its quantity. Unit prices, line totals, and the
+decimal-safe order total are displayed before saving. Existing product lines
+retain their snapshot prices even if the catalog price changes. To replace an
+existing product, confirm removing its line and add the replacement.
+
+**Save** persists both the header and the selected line items, then reloads the
+backend total. Cancelling does not save pending item edits. Empty draft orders
+remain supported. New items receive stable IDs so an interrupted save can be
+resumed without creating duplicate orders or lines. The save is multiple Rayfin
+requests, not one transaction: if a request fails, some changes may already be
+persisted. Keep the dialog open and retry to resume, or close it and refresh the
+orders list to inspect the saved state. Detected concurrent edits require
+reopening the form rather than overwriting them.
+
+The SQL total guards described above are still required. If a saved order total
+does not match its items, the service surfaces an error instead of inventing a
+successful client-side total update.
 
 ## Run locally
 
@@ -157,7 +186,7 @@ lifecycle, authentication restoration, and routed management workflows.
 Service and UI integration tests use mocked API responses; they do **not**
 prove that a live Fabric database was deployed.
 
-Completed validation: all seven management entities (plus the retained Todo)
+Initial implementation validation: all seven management entities (plus the retained Todo)
 passed the actual offline Rayfin analyzer/generator, including foreign-key
 targets and `DECIMAL(18,2)` mappings. TypeScript and the production build passed.
 All 68 tests passed, including a non-UTC timezone run. ESLint reported zero
@@ -258,6 +287,9 @@ All paths below are relative to this application directory.
   [package.json](package.json), and this README.
 - **Tests:** [dataMoneyValidation.test.ts](src/__tests__/dataMoneyValidation.test.ts),
   [dataServices.test.ts](src/__tests__/dataServices.test.ts),
+  [orderForm.test.tsx](src/__tests__/orderForm.test.tsx),
+  [rayfinSelection.test.ts](src/__tests__/rayfinSelection.test.ts) (actual SDK
+  requests against a field-projecting mocked backend),
   [forms.test.tsx](src/__tests__/forms.test.tsx),
   [dialogs.test.tsx](src/__tests__/dialogs.test.tsx),
   [useResource.test.tsx](src/__tests__/useResource.test.tsx),

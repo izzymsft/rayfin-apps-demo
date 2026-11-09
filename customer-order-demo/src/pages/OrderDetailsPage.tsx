@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { getOrderById, updateOrder, deleteOrder } from '@/services/orderService';
+import { getOrderById, updateOrderWithItems, deleteOrder } from '@/services/orderService';
 import { getCustomers } from '@/services/customerService';
 import { formatMoney } from '@/services/money';
 import { useResource, errorMessage } from '@/hooks/useResource';
@@ -41,7 +41,7 @@ export function OrderDetailsPage() {
     {editing && <Modal title="Edit order" busy={saving} onClose={() => setEditing(false)}><OrderForm initial={order} customers={customers} onCancel={() => setEditing(false)} onSubmit={async input => {
       setSaving(true);
       try {
-        await updateOrder(id, input); setEditing(false); setNotice('Order updated.');
+        await updateOrderWithItems(id, input); setEditing(false); setNotice('Order updated.');
         try { await resource.refresh(); } catch (err) { setNotice(`Order saved, but refreshing failed: ${errorMessage(err)}.`); }
       } finally { setSaving(false); }
     }} /></Modal>}
